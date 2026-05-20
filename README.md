@@ -6,13 +6,13 @@ This reference is a general Excel-aware assistant. It does not require customer-
 
 ## Screenshots
 
-| Sign in | Workbook context |
-| --- | --- |
-| ![Sign in with Glean](assets/screenshots/sign-in.svg) | ![Workbook context preview](assets/screenshots/workbook-context.svg) |
+### Clarifying Questions
 
-| Clarifying questions | Write preview |
-| --- | --- |
-| ![Clarifying questions](assets/screenshots/clarifying-questions.svg) | ![Write preview](assets/screenshots/write-preview.svg) |
+![Clarifying questions with selectable options in the Glean in Excel taskpane](assets/screenshots/clarifying-questions.png)
+
+### Excel Result
+
+![Excel workbook with the Glean in Excel taskpane showing a generated operations metrics table](assets/screenshots/excel-result.png)
 
 ## Features
 
