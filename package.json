@@ -34,7 +34,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1049.0",
-    "@aws-sdk/lib-dynamodb": "^3.1049.0",
+    "@aws-sdk/lib-dynamodb": "^3.1050.0",
     "@vitejs/plugin-react": "latest",
     "lucide-react": "latest",
     "react": "latest",
