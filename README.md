@@ -6,6 +6,10 @@ This reference is a general Excel-aware assistant. It does not require customer-
 
 ## Screenshots
 
+### Sign in
+
+![Sign in with Glean](assets/screenshots/sign-in.svg)
+
 ### Clarifying Questions
 
 ![Clarifying questions with selectable options in the Glean in Excel taskpane](assets/screenshots/clarifying-questions.png)
