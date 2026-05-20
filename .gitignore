@@ -1,0 +1,14 @@
+node_modules/
+dist/
+backend/dist/
+deployment/.packaged.yaml
+deployment/config/*.env
+!deployment/config/*.env.example
+manifest.xml
+.DS_Store
+.env
+.env.*
+!.env.example
+coverage/
+.tmp/
+npm-debug.log*

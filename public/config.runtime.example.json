@@ -1,0 +1,13 @@
+{
+  "apiBaseUrl": "/api",
+  "authMode": "sso",
+  "gleanInstance": "your-instance",
+  "oauthClientType": "dcr",
+  "oauthClientId": "",
+  "features": {
+    "writeBack": true,
+    "workbookPreview": true,
+    "fileUpload": false,
+    "customFunctions": false
+  }
+}

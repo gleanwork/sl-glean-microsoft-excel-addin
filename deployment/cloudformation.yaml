@@ -1,0 +1,384 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Glean in Excel add-in hosted on S3/CloudFront with API Gateway and Lambda proxies.
+
+Parameters:
+  DeploymentId:
+    Type: String
+    Default: test
+  DomainName:
+    Type: String
+    Default: gleaninexcel.gleandemo.com
+  CertificateArn:
+    Type: String
+    Description: ACM certificate ARN in us-east-1 for the CloudFront domain.
+  GleanInstance:
+    Type: String
+    Description: Glean instance slug, without -be.glean.com.
+  OAuthClientType:
+    Type: String
+    Default: dcr
+    AllowedValues: [dcr, static]
+  GleanOAuthClientId:
+    Type: String
+    Default: ""
+  GleanOAuthClientSecret:
+    Type: String
+    Default: ""
+    NoEcho: true
+  AdminEmails:
+    Type: String
+    Default: ""
+  ArtifactBucketName:
+    Type: String
+    Description: S3 bucket used by aws cloudformation package.
+
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Handler: index.handler
+    Timeout: 30
+    MemorySize: 256
+    Architectures: [arm64]
+    Environment:
+      Variables:
+        CONFIG_TABLE: !Ref ConfigTable
+        GLEAN_INSTANCE: !Ref GleanInstance
+        OAUTH_CLIENT_TYPE: !Ref OAuthClientType
+        GLEAN_OAUTH_CLIENT_ID: !Ref GleanOAuthClientId
+        GLEAN_OAUTH_CLIENT_SECRET: !Ref GleanOAuthClientSecret
+        ADMIN_EMAILS: !Ref AdminEmails
+        OAUTH_REDIRECT_URI: !Sub "https://${DomainName}/oauth-callback.html"
+        DCR_CLIENT_NAME: Glean in Excel
+        FEATURE_WRITE_BACK: "true"
+        FEATURE_WORKBOOK_PREVIEW: "true"
+        FEATURE_FILE_UPLOAD: "false"
+        FEATURE_CUSTOM_FUNCTIONS: "false"
+
+Resources:
+  StaticBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  ConfigTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+
+  Api:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowOrigins:
+          - !Sub "https://${DomainName}"
+        AllowMethods: [GET, PUT, POST, OPTIONS]
+        AllowHeaders: [Authorization, Content-Type]
+        MaxAge: 300
+
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ConfigTableAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt ConfigTable.Arn
+
+  ChatStreamFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaRole.Arn
+      Handler: chatStream.handler
+      CodeUri: ../backend/dist/
+      Timeout: 300
+      MemorySize: 512
+
+  ConfigFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaRole.Arn
+      Handler: config.handler
+      CodeUri: ../backend/dist/
+      Events:
+        GetConfig:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref Api
+            Path: /api/config
+            Method: GET
+        PutConfig:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref Api
+            Path: /api/config
+            Method: PUT
+
+  OAuthRegisterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaRole.Arn
+      Handler: oauthRegister.handler
+      CodeUri: ../backend/dist/
+      Events:
+        Register:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref Api
+            Path: /api/oauth/register
+            Method: POST
+
+  OAuthTokenFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaRole.Arn
+      Handler: oauthToken.handler
+      CodeUri: ../backend/dist/
+      Events:
+        Token:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref Api
+            Path: /api/oauth/token
+            Method: POST
+
+  ClientErrorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaRole.Arn
+      Handler: clientError.handler
+      CodeUri: ../backend/dist/
+      Events:
+        ClientError:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref Api
+            Path: /api/client-error
+            Method: POST
+
+  ChatRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub "glean-excel-chat-${DeploymentId}"
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  ChatRestApiApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ChatRestApi
+      ParentId: !GetAtt ChatRestApi.RootResourceId
+      PathPart: api
+
+  ChatRestApiChatResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ChatRestApi
+      ParentId: !Ref ChatRestApiApiResource
+      PathPart: chat
+
+  ChatRestApiPostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ChatRestApi
+      ResourceId: !Ref ChatRestApiChatResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2021-11-15/functions/${ChatStreamFunction.Arn}/response-streaming-invocations"
+        ResponseTransferMode: STREAM
+        TimeoutInMillis: 300000
+
+  ChatRestApiOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ChatRestApi
+      ResourceId: !Ref ChatRestApiChatResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Authorization,Content-Type'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: !Sub "'https://${DomainName}'"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  ChatRestApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ChatRestApiPostMethod
+      - ChatRestApiOptionsMethod
+    Properties:
+      RestApiId: !Ref ChatRestApi
+
+  ChatRestApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref ChatRestApi
+      DeploymentId: !Ref ChatRestApiDeployment
+      StageName: !Ref DeploymentId
+
+  ChatStreamFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ChatStreamFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ChatRestApi}/*/POST/api/chat"
+
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "glean-excel-oac-${DeploymentId}"
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  ApiOriginRequestPolicy:
+    Type: AWS::CloudFront::OriginRequestPolicy
+    Properties:
+      OriginRequestPolicyConfig:
+        Name: !Sub "glean-excel-api-origin-${DeploymentId}"
+        CookiesConfig:
+          CookieBehavior: none
+        HeadersConfig:
+          HeaderBehavior: whitelist
+          Headers:
+            - Authorization
+            - Content-Type
+            - Origin
+        QueryStringsConfig:
+          QueryStringBehavior: all
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub "Glean in Excel ${DeploymentId}"
+        Aliases:
+          - !Ref DomainName
+        DefaultRootObject: taskpane.html
+        ViewerCertificate:
+          AcmCertificateArn: !Ref CertificateArn
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+        Origins:
+          - Id: StaticOrigin
+            DomainName: !GetAtt StaticBucket.RegionalDomainName
+            S3OriginConfig: {}
+            OriginAccessControlId: !Ref OriginAccessControl
+          - Id: ApiOrigin
+            DomainName: !Sub "${Api}.execute-api.${AWS::Region}.amazonaws.com"
+            CustomOriginConfig:
+              HTTPSPort: 443
+              OriginProtocolPolicy: https-only
+          - Id: ChatRestApiOrigin
+            DomainName: !Sub "${ChatRestApi}.execute-api.${AWS::Region}.amazonaws.com"
+            OriginPath: !Sub "/${DeploymentId}"
+            CustomOriginConfig:
+              HTTPSPort: 443
+              OriginProtocolPolicy: https-only
+              OriginReadTimeout: 60
+        DefaultCacheBehavior:
+          TargetOriginId: StaticOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+        CacheBehaviors:
+          - PathPattern: /api/chat*
+            TargetOriginId: ChatRestApiOrigin
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            CachedMethods: [GET, HEAD, OPTIONS]
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+            OriginRequestPolicyId: !Ref ApiOriginRequestPolicy
+          - PathPattern: /api/*
+            TargetOriginId: ApiOrigin
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            CachedMethods: [GET, HEAD, OPTIONS]
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+            OriginRequestPolicyId: !Ref ApiOriginRequestPolicy
+
+  StaticBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref StaticBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub "${StaticBucket.Arn}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}"
+
+Outputs:
+  StaticBucketName:
+    Value: !Ref StaticBucket
+  DistributionId:
+    Value: !Ref Distribution
+  DistributionDomainName:
+    Value: !GetAtt Distribution.DomainName
+  ApiEndpoint:
+    Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com"
+  ManifestUrl:
+    Value: !Sub "https://${DomainName}/manifest.xml"

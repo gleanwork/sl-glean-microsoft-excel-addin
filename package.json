@@ -1,0 +1,63 @@
+{
+  "name": "sl-glean-microsoft-excel-addin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Customer-deployable Microsoft Excel add-in powered by Glean OAuth and Chat.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 3000",
+    "build": "npm run build:frontend && npm run build:backend",
+    "build:frontend": "vite build",
+    "build:backend": "node scripts/build-backend.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "validate:manifest": "node scripts/validate-manifest.mjs",
+    "check": "npm run typecheck && npm run lint && npm run test && npm run build && npm run validate:manifest && npm run readiness",
+    "readiness": "node scripts/check-public-readiness.mjs",
+    "dev-certs": "office-addin-dev-certs install",
+    "sideload": "office-addin-debugging start manifest.xml desktop",
+    "stop": "office-addin-debugging stop manifest.xml desktop"
+  },
+  "keywords": [
+    "glean",
+    "excel",
+    "office-add-in",
+    "oauth",
+    "solutions-library",
+    "aws"
+  ],
+  "author": "Glean",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1049.0",
+    "@aws-sdk/lib-dynamodb": "^3.1049.0",
+    "@vitejs/plugin-react": "latest",
+    "lucide-react": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "typescript": "latest",
+    "vite": "latest"
+  },
+  "devDependencies": {
+    "@eslint/js": "latest",
+    "@types/aws-lambda": "latest",
+    "@types/node": "latest",
+    "@types/office-js": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "esbuild": "latest",
+    "eslint": "latest",
+    "globals": "latest",
+    "jose": "latest",
+    "jsdom": "latest",
+    "office-addin-debugging": "latest",
+    "office-addin-dev-certs": "latest",
+    "office-addin-manifest": "latest",
+    "typescript-eslint": "latest",
+    "vitest": "latest"
+  }
+}

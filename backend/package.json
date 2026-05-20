@@ -1,0 +1,11 @@
+{
+  "name": "sl-glean-microsoft-excel-addin-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "latest",
+    "@aws-sdk/lib-dynamodb": "latest",
+    "jose": "latest"
+  }
+}
