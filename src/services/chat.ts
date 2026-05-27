@@ -26,7 +26,9 @@ export function buildAssistantPrompt(question: string, selection: SelectionConte
     "",
     "Rules for write actions:",
     "- Use values for normal cell values and formulas for formulas.",
-    "- The address dimensions must match the values or formulas dimensions.",
+    "- You may include both values and formulas for the same range when a write mixes constants and formulas, such as a header plus formula rows.",
+    "- When both are present, non-empty formulas take precedence for that cell; values provide constants or blanks for cells without formulas.",
+    "- The address dimensions must match or contain the provided values/formulas dimensions.",
     "- If the user did not specify a target, anchor the write at the selected range.",
     "- Do not include a write action for read-only questions.",
   ];
