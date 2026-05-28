@@ -67,17 +67,53 @@ This flow is isolated in `src/services/chat.ts` because it is legacy `/rest/api/
 
 ## Local Development
 
+### UI-only local dev
+
+Use this for fast taskpane UI iteration in a browser. It does not exercise Excel APIs or the AWS proxy routes.
+
 ```bash
 npm install
 npm run dev
 ```
 
-For Office sideloading, install dev certs and generate a local manifest:
+Open `https://127.0.0.1:3000/taskpane.html`.
+
+### Excel sideload dev
+
+To test Office.js behavior, load the add-in inside Excel. Office add-ins require HTTPS, so install trusted dev certificates first.
 
 ```bash
 npm run dev-certs
 DOMAIN_NAME=localhost:3000 GLEAN_INSTANCE=your-instance node deployment/scripts/generate-manifest.mjs
 npm run sideload
+```
+
+For local sideloading, create `public/config/runtime.json` before starting Vite:
+
+```json
+{
+  "apiBaseUrl": "https://<deployed-domain>/api",
+  "authMode": "sso",
+  "gleanInstance": "your-instance",
+  "oauthClientType": "dcr",
+  "oauthClientId": "",
+  "features": {
+    "writeBack": true,
+    "workbookPreview": true,
+    "fileUpload": false,
+    "customFunctions": false
+  }
+}
+```
+
+The frontend can run locally, but the backend `/api/*` routes are deployed as AWS Lambda/API Gateway resources. For full login and chat behavior, point `apiBaseUrl` at a deployed backend domain. A purely local backend proxy is not included in this reference.
+
+### Full end-to-end testing
+
+For production-like testing, deploy to AWS and install the hosted manifest:
+
+```text
+https://<your-domain>/manifest.xml
 ```
 
 ## Deploy to AWS
