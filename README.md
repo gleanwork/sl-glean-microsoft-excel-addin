@@ -10,11 +10,11 @@ This reference is a general Excel-aware assistant. It does not require customer-
 
 ![Sign in with Glean](assets/screenshots/sign-in.svg)
 
-### Clarifying Questions
+### Instructions & Clarifying Questions
 
 ![Clarifying questions with selectable options in the Glean in Excel taskpane](assets/screenshots/clarifying-questions.png)
 
-### Excel Result
+### Example Result
 
 ![Excel workbook with the Glean in Excel taskpane showing a generated operations metrics table](assets/screenshots/excel-result.png)
 
