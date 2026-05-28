@@ -8,6 +8,16 @@ function isRectangularMatrix(value: unknown): value is unknown[][] {
   );
 }
 
+function matrixDimensions(value: unknown[][] | undefined): { rows: number; columns: number } | null {
+  if (!isRectangularMatrix(value)) {
+    return null;
+  }
+  return {
+    rows: value.length,
+    columns: Array.isArray(value[0]) ? value[0].length : 0,
+  };
+}
+
 function validateWriteRangeAction(value: unknown): WriteRangeAction | null {
   if (!value || typeof value !== "object") {
     return null;
@@ -16,16 +26,16 @@ function validateWriteRangeAction(value: unknown): WriteRangeAction | null {
   if (candidate.action !== "writeRange" || typeof candidate.address !== "string") {
     return null;
   }
-  const hasValues = isRectangularMatrix(candidate.values);
-  const hasFormulas = isRectangularMatrix(candidate.formulas);
-  if (hasValues === hasFormulas) {
+  const valuesDimensions = matrixDimensions(candidate.values);
+  const formulasDimensions = matrixDimensions(candidate.formulas);
+  if (!valuesDimensions && !formulasDimensions) {
     return null;
   }
   return {
     action: "writeRange",
     address: candidate.address,
-    values: hasValues ? candidate.values : undefined,
-    formulas: hasFormulas ? (candidate.formulas as string[][]) : undefined,
+    values: valuesDimensions ? candidate.values : undefined,
+    formulas: formulasDimensions ? (candidate.formulas as string[][]) : undefined,
     autofitColumns: candidate.autofitColumns !== false,
   };
 }
@@ -57,15 +67,16 @@ export function parseAssistantResponse(rawText: string): ParsedAssistantResponse
 }
 
 export function actionDimensions(action: WriteRangeAction): { rows: number; columns: number } {
-  const matrix = action.values || action.formulas || [];
+  const valuesDimensions = matrixDimensions(action.values);
+  const formulasDimensions = matrixDimensions(action.formulas);
   return {
-    rows: matrix.length,
-    columns: Array.isArray(matrix[0]) ? matrix[0].length : 0,
+    rows: Math.max(valuesDimensions?.rows || 0, formulasDimensions?.rows || 0),
+    columns: Math.max(valuesDimensions?.columns || 0, formulasDimensions?.columns || 0),
   };
 }
 
 export function describeWriteAction(action: WriteRangeAction): string {
   const { rows, columns } = actionDimensions(action);
-  const kind = action.formulas ? "formulas" : "values";
+  const kind = action.values && action.formulas ? "values/formulas" : action.formulas ? "formulas" : "values";
   return `Apply ${rows * columns} ${kind} to ${action.address}`;
 }

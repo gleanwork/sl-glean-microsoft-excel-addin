@@ -1,4 +1,5 @@
 import type { SelectionContext, WriteRangeAction } from "../types";
+import { actionDimensions } from "./actions";
 
 const selectionPreviewRows = 25;
 const selectionPreviewCols = 15;
@@ -187,22 +188,40 @@ function resolveTargetRange(
   return context.workbook.worksheets.getActiveWorksheet().getRange(action.address);
 }
 
+function matrixHasCell(matrix: unknown[][] | undefined, row: number, column: number): boolean {
+  return Array.isArray(matrix?.[row]) && column < matrix[row].length;
+}
+
+function formulaHasContent(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 export async function applyWriteRangeAction(action: WriteRangeAction): Promise<string> {
   return Excel.run(async (context) => {
-    const matrix = action.values || action.formulas;
-    if (!matrix?.length || !Array.isArray(matrix[0])) {
+    const dimensions = actionDimensions(action);
+    if (!dimensions.rows || !dimensions.columns) {
       throw new Error("The proposed update did not include a rectangular values or formulas matrix.");
     }
     const target = resolveTargetRange(context, action);
-    const rows = matrix.length;
-    const cols = matrix[0].length;
-    const writeRange = target.getCell(0, 0).getResizedRange(rows - 1, cols - 1);
+    const writeRange = target.getCell(0, 0).getResizedRange(dimensions.rows - 1, dimensions.columns - 1);
 
-    if (action.values) {
-      writeRange.values = action.values;
-    } else if (action.formulas) {
-      writeRange.formulas = action.formulas;
+    for (let row = 0; row < dimensions.rows; row += 1) {
+      for (let column = 0; column < dimensions.columns; column += 1) {
+        const formula = action.formulas?.[row]?.[column];
+        const hasFormulaCell = matrixHasCell(action.formulas, row, column);
+        const hasValueCell = matrixHasCell(action.values, row, column);
+        const cell = writeRange.getCell(row, column);
+
+        if (formulaHasContent(formula)) {
+          cell.formulas = [[formula]];
+        } else if (hasValueCell) {
+          cell.values = [[action.values?.[row]?.[column] ?? ""]];
+        } else if (hasFormulaCell) {
+          cell.values = [[""]];
+        }
+      }
     }
+
     if (action.autofitColumns !== false) {
       writeRange.format.autofitColumns();
     }
