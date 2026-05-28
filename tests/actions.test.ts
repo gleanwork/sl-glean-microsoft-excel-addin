@@ -18,6 +18,16 @@ describe("parseAssistantResponse", () => {
     expect(actionDimensions(parsed.action!)).toEqual({ rows: 2, columns: 1 });
   });
 
+  it("extracts mixed values and formulas for one writeRange action", () => {
+    const parsed = parseAssistantResponse(
+      '<glean_action>{"action":"writeRange","address":"I1:I3","values":[["Utilization Alert"]],"formulas":[[""],["=IF(D2>=90,\\"Critical\\",\\"\\")"],["=IF(D3>=90,\\"Critical\\",\\"\\")"]]}</glean_action>',
+    );
+
+    expect(parsed.action?.values).toEqual([["Utilization Alert"]]);
+    expect(parsed.action?.formulas).toHaveLength(3);
+    expect(actionDimensions(parsed.action!)).toEqual({ rows: 3, columns: 1 });
+  });
+
   it("ignores non-rectangular matrices", () => {
     const parsed = parseAssistantResponse(
       '<glean_action>{"action":"writeRange","address":"B2:C3","values":[["A"],["B","C"]]}</glean_action>',
